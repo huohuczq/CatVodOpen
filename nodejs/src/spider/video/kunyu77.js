@@ -8,9 +8,9 @@ import CryptoJS from 'crypto-js';
 let url = 'https://api.tyun77.cn';
 let device = {};
 let timeOffset = 0;
-const appVer = '2.3.0';
+const appVer = '2.2.0';
 const rsa = NodeRSA(
-    `-----BEGIN PUBLIC KEY-----
+   `-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7QHUVAUM7yghB0/3qz5C
 bWX5YYD0ss+uDtbDz5VkTclop6YnCY+1U4aw4z134ljkp/jL0mWnYioZHTTqxXMf
 R5q15FcMZnnn/gMZNj1ZR67/c9ti6WTG0VEr9IdcJgwHwwGak/xQK1Z9htl7TR3Q
@@ -396,7 +396,7 @@ async function test(inReq, outResp) {
 export default {
     meta: {
         key: 'kunyu77',
-        name: '琨娱七七',
+        name: '🟢 七七',
         type: 3,
     },
     api: async (fastify) => {

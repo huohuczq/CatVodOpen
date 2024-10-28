@@ -9,21 +9,24 @@ let url = 'https://api1.baibaipei.com:8899';
 let device = {};
 
 async function request(reqUrl, postData, agentSp, get) {
+    const suffix = '!3%would7ZRj16Hilanguagesnake$)personalGjO$CzA3ld9many6lQ(613^FGsituationsouth$hv@mwelcomesuggest*merely';
     let ts = dayjs().valueOf().toString();
     let rand = randStr(32);
-    let sign = CryptoJS.enc.Hex.stringify(CryptoJS.MD5('H58d2%gLbeingX*%D4Y8!C!!@G_' + ts + '_' + rand))
+    let reqUrlx = postData ? (reqUrl + '?' + postData) : reqUrl;
+    let sign = CryptoJS.enc.Hex.stringify(CryptoJS.MD5(reqUrlx + '_graphrange(u4%0Xpf52_' + ts + '_' + rand + suffix))
         .toString()
         .toLowerCase();
+        // console.log(reqUrlx + '_graphrange(u4%0Xpf52_' + ts + '_' + rand + suffix)
     let headers = {
         'user-agent': agentSp || device.ua,
     };
     if (reqUrl.includes('baibaipei')) {
         headers['device-id'] = device.id;
-        headers['push-token'] = '';
+        // headers['push-token'] = '';
         headers['sign'] = sign;
         headers['time'] = ts;
         headers['md5'] = rand;
-        headers['version'] = '2.1.5';
+        headers['version'] = '2.1.7';
         headers['system-model'] = device.model;
         headers['system-brand'] = device.brand;
         headers['system-version'] = device.release;
@@ -34,14 +37,13 @@ async function request(reqUrl, postData, agentSp, get) {
     let res = await req(reqUrl, {
         method: get ? 'get' : 'post',
         headers: headers,
-        data: postData || {},
+        data: postData || '',
     });
 
     let content = res.data;
-    // console.log(content);
     if (typeof content === 'string') {
-        var key = CryptoJS.enc.Utf8.parse('IjhHsCB2B5^#%0Ag');
-        var iv = CryptoJS.enc.Utf8.parse('y8_m.3rauW/>j,}.');
+        var key = CryptoJS.enc.Utf8.parse('NL/Ydygzmwcgl,JM');
+        var iv = CryptoJS.enc.Utf8.parse('az5)0f,%D7HAIBGM');
         var src = CryptoJS.enc.Base64.parse(content);
         let dst = CryptoJS.AES.decrypt({ ciphertext: src }, key, { iv: iv, padding: CryptoJS.pad.Pkcs7 });
         dst = CryptoJS.enc.Utf8.stringify(dst);
@@ -57,7 +59,7 @@ async function init(inReq, _outResp) {
     if (!device.id) {
         device = randDeviceWithId(33);
         device.id = device.id.toLowerCase();
-        device.ua = 'okhttp/4.1.0';
+        device.ua = 'okhttp/3.14.9';
         await inReq.server.db.push(deviceKey, device);
     }
     return {};
@@ -77,7 +79,7 @@ async function home(_inReq, _outResp) {
         });
         try {
             let filterAll = [];
-            let filterData = (await request(url + '/api.php/Video/getFilterType', { type: typeId })).data;
+            let filterData = (await request(url + '/api.php/Video/getFilterType', 'type='+typeId)).data;
             for (let key of Object.keys(filterData)) {
                 let itemValues = filterData[key];
                 if (key === 'plot') key = 'class';
@@ -134,15 +136,7 @@ async function category(inReq, _outResp) {
     let page = pg || 1;
     if (page == 0) page = 1;
     let reqUrl = url + '/api.php/Video/getFilterVideoList';
-    var formData = {
-        type: tid,
-        p: page.toString(),
-        area: extend.area | 0,
-        year: extend.year | 0,
-        sort: extend.sort | 0,
-        class: extend.class | 0,
-    };
-    // console.log(formData);
+    var formData = 'type=' + tid + '&sort=' + (extend.sort | 0) + '&area=' + (extend.area | 0) + '&class=' + (extend.class | 0) + '&year=' + (extend.year | 0) + '&p=' + page;
     let data = (await request(reqUrl, formData)).data;
     let videos = [];
     for (const vod of data.data) {
@@ -166,7 +160,7 @@ async function detail(inReq, _outResp) {
     const ids = !Array.isArray(inReq.body.id) ? [inReq.body.id] : inReq.body.id;
     const videos = [];
     for (const id of ids) {
-        let data = (await request(url + '/api.php/Video/getVideoInfo', { video_id: id })).data.video;
+        let data = (await request(url + '/api.php/Video/getVideoInfo', 'video_id='+id)).data.video;
         let vod = {
             vod_id: data.vod_id,
             vod_name: data.vod_name,
@@ -272,7 +266,7 @@ async function search(inReq, _outResp) {
     const wd = inReq.body.wd;
     let page = pg || 1;
     if (page == 0) page = 1;
-    let data = (await request(url + '/api.php/Search/getSearch', { key: wd, type_id: 0, p: page })).data;
+    let data = (await request(url + '/api.php/Search/getSearch', 'key='+encodeURIComponent(wd)+'&type_id='+0+'&p='+page)).data;
     let videos = [];
     for (const vod of data.data) {
         videos.push({
@@ -359,7 +353,7 @@ async function test(inReq, outResp) {
 export default {
     meta: {
         key: 'kkys',
-        name: '快看影视',
+        name: '🟢 快看',
         type: 3,
     },
     api: async (fastify) => {
