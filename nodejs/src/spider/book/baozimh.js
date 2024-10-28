@@ -2,7 +2,9 @@ import req from '../../util/req.js';
 import { MOBILE_UA } from '../../util/misc.js';
 import { load } from 'cheerio';
 
-let url = 'https://m.13bqg.cc';
+let url = 'https://cn.baozimh.com';
+const img = 'https://static-tw.baozimh.com/cover/';
+const img2 = '?w=285&h=375&q=100';
 
 async function request(reqUrl) {
     let resp = await req.get(reqUrl, {
@@ -19,43 +21,72 @@ async function init(_inReq, _outResp) {
 }
 
 async function home(_inReq, _outResp) {
-    var html = await request(url);
+    var html = await request(url + '/classify');
     const $ = load(html);
-    let classes = [];
-    for (const a of $('div.nav > ul > li > a[href!="/"]')) {
-        classes.push({
-            type_id: a.attribs.href.replace(/\//g, ''),
-            type_name: a.children[0].data.trim(),
-            tline: 2,
+    let filterObj = { c1: [] };
+    for (const nav of $('div.classify div.nav')) {
+        const as = $(nav).find('a.item');
+        const checkUrl = decodeURIComponent(as[1].attribs.href);
+        const reg = /type=(.*)&region=(.*)&state=(.*)&filter=(.*)/;
+        const matchs = checkUrl.match(reg);
+        let typeKey = '';
+        let typeIdx = 1;
+        if (matchs[1] != 'all') {
+            typeKey = 'type';
+            typeIdx = 1;
+        } else if (matchs[2] != 'all') {
+            typeKey = 'region';
+            typeIdx = 2;
+        } else if (matchs[3] != 'all') {
+            typeKey = 'state';
+            typeIdx = 3;
+        } else if (matchs[4] != '*') {
+            typeKey = 'filter';
+            typeIdx = 4;
+        }
+        const tvals = [];
+        for (const a of as) {
+            tvals.push({
+                n: $(a).text().trim(),
+                v: decodeURIComponent(a.attribs.href).match(reg)[typeIdx],
+            });
+        }
+        filterObj['c1'].push({
+            key: typeKey,
+            name: '',
+            wrap: typeIdx == 1 ? 1 : 0,
+            init: typeIdx == 4 ? '*' : 'all',
+            value: tvals,
         });
     }
+
     return {
-        class: classes,
+        class: [{ type_name: 'all', type_id: 'c1' }],
+        filters: filterObj,
     };
 }
 
 async function category(inReq, _outResp) {
-    const tid = inReq.body.id;
-    const pg = inReq.body.page;
+    const tid= inReq.body.id;
+    const pg =inReq.body.page;
+    const extend = inReq.body.filters;
     let page = pg || 1;
     if (page == 0) page = 1;
-    var html = await request(url + `/${tid}/${page}.html`);
-    const $ = load(html);
+    let link = `${url}/api/bzmhq/amp_comic_list?type=${extend.type || 'all'}&region=${extend.region || 'all'}&state=${extend.state || 'all'}&filter=${extend.filter || '*'}`;
+    link += '&page=' + page + '&limit=36&language=cn';
+    var html = await request(link);
     let books = [];
-    for (const item of $('div.item')) {
-        const a = $(item).find('a:first')[0];
-        const img = $(a).find('img:first')[0];
-        const span = $(item).find('span:first')[0];
+    for (const book of html.items) {
         books.push({
-            book_id: a.attribs.href,
-            book_name: img.attribs.alt,
-            book_pic: img.attribs.src,
-            book_remarks: span.children[0].data.trim(),
+            book_id: book.comic_id,
+            book_name: book.name,
+            book_pic: img + book.topic_img + img2,
+            book_remarks: book.author || '',
         });
     }
     return {
-        page: pg,
-        pagecount: $('div.page > a:contains(>)').length > 0 ? pg + 1 : pg,
+        page: page,
+        pagecount: books.length == 36 ? page + 1 : page,
         list: books,
     };
 }
@@ -63,28 +94,25 @@ async function category(inReq, _outResp) {
 async function detail(inReq, _outResp) {
     const ids = !Array.isArray(inReq.body.id) ? [inReq.body.id] : inReq.body.id;
     const books = [];
-    for (const id of ids) {
-        var html = await request(url + id);
-        var $ = load(html);
-        let book = {
-            book_name: $('[property$=book_name]')[0].attribs.content,
-            book_year: $('[property$=update_time]')[0].attribs.content,
-            book_director: $('[property$=author]')[0].attribs.content,
-            book_content: $('[property$=description]')[0].attribs.content,
-        };
-        html = await request(url + id + `list.html`);
-        $ = load(html);
-        let urls = [];
-        const links = $('dl>dd>a[href*="/html/"]');
-        for (const l of links) {
-            var name = $(l).text().trim();
-            var link = l.attribs.href;
-            urls.push(name + '$' + link);
-        }
-        book.volumes = '全卷';
-        book.urls = urls.join('#');
-        books.push(book);
+    for(const id of ids){
+    var html = await request(`${url}/comic/${id}`);
+    const $ = load(html);
+    let book = {
+        book_director: $('[data-hid$=og:novel:author]')[0].attribs.content || '',
+        book_content: $('[data-hid$=og:description]')[0].attribs.content || '',
+    };
+    const formatUrl = (_, a) => {
+        return $(a).text().replace(/\$|#/g, '').trim() + '$' + decodeURIComponent(a.attribs.href);
+    };
+    let urls =$('div#chapter-items a.comics-chapters__item').map(formatUrl).get();
+    urls.push(...$('div#chapters_other_list a.comics-chapters__item').map(formatUrl).get());
+    if (urls.length == 0) {
+        urls = $('div.pure-g a.comics-chapters__item').map(formatUrl).get().reverse();
     }
+    book.volumes = '默认';
+    book.urls = urls.join('#');
+    books.push(book);
+}
     return {
         list: books,
     };
@@ -92,60 +120,34 @@ async function detail(inReq, _outResp) {
 
 async function play(inReq, _outResp) {
     let id = inReq.body.id;
-    var content = '';
-    while (true) {
-        var html = await request(url + id);
-        var $ = load(html);
-        content += $('#chaptercontent')
-            .html()
-            .replace(/<br>|请收藏.*?<\/p>/g, '\n')
-            .trim();
-        id = $('a.Readpage_down')[0].attribs.href;
-        if (id.indexOf('_') < 0) break;
-    }
-    return {
-        content: content + '\n\n',
-    };
+    var html = await request(url + id);
+        const $ = load(html);
+
+        var content = [];
+        for (const img of $('amp-img')) {
+            content.push(img.attribs.src);
+        }
+        return {
+            content: content,
+        };
 }
 
 async function search(inReq, _outResp) {
     const wd = inReq.body.wd;
-    const cook = await req.get(`${url}/user/hm.html?q=${encodeURIComponent(wd)}`, {
-        headers: {
-            accept: 'application/json',
-            'User-Agent': MOBILE_UA,
-            Referer: `${url}/s?q=${encodeURIComponent(wd)}`,
-        },
-    });
-    const set_cookie = Array.isArray(cook.headers['set-cookie']) ? cook.headers['set-cookie'].join(';;;') : cook.headers['set-cookie'];
-    const cks = set_cookie.split(';;;');
-    const cookie = {};
-    for (const c of cks) {
-        const tmp = c.trim();
-        const idx = tmp.indexOf('=');
-        const k = tmp.substr(0, idx);
-        const v = tmp.substr(idx + 1, tmp.indexOf(';') - idx - 1);
-        cookie[k] = v;
-    }
-    const resp = await req.get(`${url}/user/search.html?q=${encodeURIComponent(wd)}&so=undefined`, {
-        headers: {
-            accept: 'application/json',
-            'User-Agent': MOBILE_UA,
-            cookie: 'hm=' + cookie['hm'],
-            Referer: `${url}/s?q=${encodeURIComponent(wd)}`,
-        },
-    });
-    let books = [];
-    for (const book of resp.data) {
+    var html = await request(`${url}/search?q=${wd}`);
+    const $ = load(html);
+    const books = [];
+    for (const a of $('div.classify-items a.comics-card__poster')) {
         books.push({
-            book_id: book.url_list,
-            book_name: book.articlename,
-            book_pic: book.url_img,
-            book_remarks: book.author,
+            book_id: a.attribs.href.replace('/comic/', ''),
+            book_name: a.attribs.title,
+            book_pic: $(a).find('amp-img:first')[0].attribs.src,
+            book_remarks: '',
         });
     }
     return {
-        tline: 2,
+        page: 1,
+        pagecount: 1,
         list: books,
     };
 }
@@ -204,7 +206,7 @@ async function test(inReq, outResp) {
             }
         }
         resp = await inReq.server.inject().post(`${prefix}/search`).payload({
-            wd: '科技',
+            wd: '入手',
             page: 1,
         });
         dataResult.search = resp.json();
@@ -219,9 +221,9 @@ async function test(inReq, outResp) {
 
 export default {
     meta: {
-        key: '13bqg',
-        name: '📓 笔趣阁',
-        type: 10,
+        key: 'baozimh',
+        name: '📓 包子漫画',
+        type: 20,
     },
     api: async (fastify) => {
         fastify.post('/init', init);
